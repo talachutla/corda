@@ -5,6 +5,9 @@ import net.corda.core.identity.PartyAndCertificate
 import net.corda.core.internal.ThreadBox
 import net.corda.core.node.services.IdentityService
 import net.corda.core.serialization.SingletonSerializeAsToken
+import net.corda.cryptoservice.CryptoService
+import net.corda.node.services.keys.cryptoServices.AliasPrivateKey
+import net.corda.node.services.keys.cryptoServices.BCCryptoService
 import org.bouncycastle.operator.ContentSigner
 import java.security.KeyPair
 import java.security.PrivateKey
@@ -24,7 +27,7 @@ import javax.annotation.concurrent.ThreadSafe
  * etc.
  */
 @ThreadSafe
-class E2ETestKeyManagementService(val identityService: IdentityService) : SingletonSerializeAsToken(), KeyManagementServiceInternal {
+class E2ETestKeyManagementService(val identityService: IdentityService, private val cryptoService: CryptoService?) : SingletonSerializeAsToken(), KeyManagementServiceInternal {
     private class InnerState {
         val keys = HashMap<PublicKey, PrivateKey>()
     }
@@ -32,12 +35,18 @@ class E2ETestKeyManagementService(val identityService: IdentityService) : Single
     private val mutex = ThreadBox(InnerState())
     // Accessing this map clones it.
     override val keys: Set<PublicKey> get() = mutex.locked { keys.keys }
+    // Maintain a map from PublicKey to alias for the initial keys.
+
     val keyPairs: Set<KeyPair> get() = mutex.locked { keys.map { KeyPair(it.key, it.value) }.toSet() }
 
     override fun start(initialKeyPairs: Set<KeyPair>) {
         mutex.locked {
             for (key in initialKeyPairs) {
-                keys[key.public] = key.private
+                var privateKey = key.private
+                if (privateKey is AliasPrivateKey && cryptoService is BCCryptoService) {
+                    privateKey = cryptoService.keyStore.getPrivateKey(privateKey.alias)
+                }
+                keys[key.public] = privateKey
             }
         }
     }

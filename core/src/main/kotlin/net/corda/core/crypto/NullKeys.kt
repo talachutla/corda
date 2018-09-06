@@ -3,6 +3,7 @@ package net.corda.core.crypto
 import net.corda.core.KeepForDJVM
 import net.corda.core.identity.AnonymousParty
 import net.corda.core.serialization.CordaSerializable
+import java.security.PrivateKey
 import java.security.PublicKey
 
 @KeepForDJVM
@@ -13,6 +14,13 @@ object NullKeys {
         override fun getEncoded() = byteArrayOf(0)
         override fun getFormat() = "NULL"
         override fun compareTo(other: PublicKey): Int = if (other == NullPublicKey) 0 else -1
+        override fun toString() = "NULL_KEY"
+    }
+
+    object NullPrivateKey : PrivateKey {
+        override fun getAlgorithm() = "NULL"
+        override fun getEncoded() = byteArrayOf(0)
+        override fun getFormat() = "NULL"
         override fun toString() = "NULL_KEY"
     }
 

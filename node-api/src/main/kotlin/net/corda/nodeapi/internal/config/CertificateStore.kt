@@ -1,6 +1,7 @@
 package net.corda.nodeapi.internal.config
 
 import net.corda.core.internal.outputStream
+import net.corda.nodeapi.internal.crypto.DummyKeysAndCerts
 import net.corda.nodeapi.internal.crypto.X509KeyStore
 import net.corda.nodeapi.internal.crypto.X509Utilities
 import net.corda.nodeapi.internal.crypto.addOrReplaceCertificate
@@ -8,6 +9,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.nio.file.OpenOption
 import java.nio.file.Path
+import java.security.PrivateKey
 import java.security.cert.X509Certificate
 
 interface CertificateStore : Iterable<Pair<String, X509Certificate>> {
@@ -41,7 +43,6 @@ interface CertificateStore : Iterable<Pair<String, X509Certificate>> {
     }
 
     operator fun set(alias: String, certificate: X509Certificate) {
-
         update {
             internal.addOrReplaceCertificate(X509Utilities.CORDA_ROOT_CA, certificate)
         }
@@ -63,7 +64,6 @@ interface CertificateStore : Iterable<Pair<String, X509Certificate>> {
      * @throws IllegalArgumentException if no certificate for the alias is found, or if the certificate is not an [X509Certificate].
      */
     operator fun get(alias: String): X509Certificate {
-
         return query {
             getCertificate(alias)
         }
@@ -76,6 +76,16 @@ interface CertificateStore : Iterable<Pair<String, X509Certificate>> {
         certificateStore.update {
             this@CertificateStore.forEach(::setCertificate)
         }
+    }
+
+    fun setCertPathOnly(alias: String, certificates: List<X509Certificate>) {
+        // In case CryptoService and CertificateStore share the same KeyStore, extract and store the key again.
+        val privateKey = if (this.contains(alias)) {
+            this.value.getPrivateKey(alias)
+        } else {
+            DummyKeysAndCerts.DUMMY_ECDSAR1_KEYPAIR.private
+        }
+        this.value.setPrivateKey(alias, privateKey, certificates)
     }
 }
 

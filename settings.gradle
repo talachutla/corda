@@ -61,6 +61,7 @@ include 'samples:bank-of-corda-demo'
 include 'samples:cordapp-configuration'
 include 'samples:network-verifier'
 include 'serialization'
+include 'crypto-service'
 
 apply from: 'buildCacheSettings.gradle'
 

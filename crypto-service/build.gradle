@@ -1,0 +1,8 @@
+apply plugin: 'kotlin'
+
+dependencies {
+    compile "org.bouncycastle:bcprov-jdk15on:${bouncycastle_version}"
+    compile "org.bouncycastle:bcpkix-jdk15on:${bouncycastle_version}"
+    compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    testCompile "junit:junit:$junit_version"
+}

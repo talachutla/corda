@@ -19,6 +19,5 @@ interface CertificateStoreSupplier {
 
 // TODO replace reference to FileBasedCertificateStoreSupplier with CertificateStoreSupplier, after coming up with a way of passing certificate stores to Artemis.
 class FileBasedCertificateStoreSupplier(val path: Path, val password: String) : CertificateStoreSupplier {
-
     override fun get(createNew: Boolean) = CertificateStore.fromFile(path, password, createNew)
 }

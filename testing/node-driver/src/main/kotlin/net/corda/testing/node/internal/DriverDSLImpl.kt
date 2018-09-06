@@ -311,7 +311,7 @@ class DriverDSLImpl(
                         config.corda,
                         HTTPNetworkRegistrationService(networkServicesConfig, versionInfo),
                         NodeRegistrationOption(rootTruststorePath, rootTruststorePassword)
-                ).buildKeystore()
+                ).generateKeysAndRegister()
                 config
             }
         } else {

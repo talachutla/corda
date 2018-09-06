@@ -374,7 +374,7 @@ open class InternalMockNetwork(defaultParameters: MockNetworkParameters = MockNe
         }
 
         override fun makeKeyManagementService(identityService: PersistentIdentityService): KeyManagementServiceInternal {
-            return E2ETestKeyManagementService(identityService)
+            return E2ETestKeyManagementService(identityService, cryptoService)
         }
 
         override fun startShell() {
@@ -570,5 +570,7 @@ private fun mockNodeConfiguration(certificatesDirectory: Path): NodeConfiguratio
         doReturn(FlowTimeoutConfiguration(1.hours, 3, backoffBase = 1.0)).whenever(it).flowTimeout
         doReturn(5.seconds.toMillis()).whenever(it).additionalNodeInfoPollingFrequencyMsec
         doReturn(null).whenever(it).devModeOptions
+        doReturn(null).whenever(it).cryptoServiceName
+        doReturn(null).whenever(it).cryptoServiceConf
     }
 }
