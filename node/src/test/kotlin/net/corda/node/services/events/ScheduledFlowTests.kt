@@ -4,10 +4,7 @@ import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.concurrent.CordaFuture
 import net.corda.core.context.InvocationOrigin
 import net.corda.core.contracts.*
-import net.corda.core.flows.FinalityFlow
-import net.corda.core.flows.FlowLogic
-import net.corda.core.flows.FlowLogicRefFactory
-import net.corda.core.flows.SchedulableFlow
+import net.corda.core.flows.*
 import net.corda.core.identity.Party
 import net.corda.core.node.services.VaultService
 import net.corda.core.node.services.queryBy
@@ -60,6 +57,7 @@ class ScheduledFlowTests {
         override val participants: List<Party> get() = listOf(source, destination)
     }
 
+    @InitiatingFlow
     class InsertInitialStateFlow(private val destination: Party, private val notary: Party) : FlowLogic<Unit>() {
         @Suspendable
         override fun call() {
@@ -68,10 +66,19 @@ class ScheduledFlowTests {
                     .addOutputState(scheduledState, DummyContract.PROGRAM_ID)
                     .addCommand(dummyCommand(ourIdentity.owningKey))
             val tx = serviceHub.signInitialTransaction(builder)
-            subFlow(FinalityFlow(tx))
+            subFlow(FinalityFlow(tx, initiateFlow(destination)))
         }
     }
 
+    @InitiatedBy(InsertInitialStateFlow::class)
+    class InsertInitialStateResponderFlow(private val otherSide: FlowSession) : FlowLogic<Unit>() {
+        @Suspendable
+        override fun call() {
+            subFlow(ReceiveFinalityFlow(otherSide))
+        }
+    }
+
+    @InitiatingFlow
     @SchedulableFlow
     class ScheduledFlow(private val stateRef: StateRef) : FlowLogic<Unit>() {
         @Suspendable
@@ -90,7 +97,15 @@ class ScheduledFlowTests {
                     .addOutputState(newStateOutput, DummyContract.PROGRAM_ID)
                     .addCommand(dummyCommand(ourIdentity.owningKey))
             val tx = serviceHub.signInitialTransaction(builder)
-            subFlow(FinalityFlow(tx, setOf(scheduledState.destination)))
+            subFlow(FinalityFlow(tx, initiateFlow(scheduledState.destination)))
+        }
+    }
+
+    @InitiatedBy(ScheduledFlow::class)
+    class ScheduledResponderFlow(private val otherSide: FlowSession) : FlowLogic<Unit>() {
+        @Suspendable
+        override fun call() {
+            subFlow(ReceiveFinalityFlow(otherSide))
         }
     }
 
@@ -102,6 +117,10 @@ class ScheduledFlowTests {
         notary = mockNet.defaultNotaryIdentity
         alice = aliceNode.info.singleIdentity()
         bob = bobNode.info.singleIdentity()
+        listOf(aliceNode, bobNode).forEach {
+            it.registerInitiatedFlow(InsertInitialStateResponderFlow::class.java)
+            it.registerInitiatedFlow(ScheduledResponderFlow::class.java)
+        }
     }
 
     @After

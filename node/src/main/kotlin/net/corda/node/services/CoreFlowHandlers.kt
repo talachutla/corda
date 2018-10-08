@@ -11,17 +11,32 @@ import net.corda.core.transactions.ContractUpgradeWireTransaction
 import net.corda.core.node.StatesToRecord
 import net.corda.core.transactions.SignedTransaction
 
-// TODO: We should have a whitelist of contracts we're willing to accept at all, and reject if the transaction
-//       includes us in any outside that list. Potentially just if it includes any outside that list at all.
-// TODO: Do we want to be able to reject specific transactions on more complex rules, for example reject incoming
-//       cash without from unknown parties?
-class FinalityHandler(private val sender: FlowSession) : FlowLogic<Unit>() {
+/**
+ * The FinalityHandler is insecure as it blindly accepts any and all transactions into the node's local vault without
+ * doing any checks. To plug this hole, the sending-side FinalityFlow is gated to only work with old CorDapps (those whose
+ * target platform version < 4), and this flow will only work if there are old CorDapps loaded (to preserve backwards
+ * compatibility).
+ *
+ * If an attempt is made to send us a transaction via FinalityHandler, and it's disabled, then FinalityHandler will receive
+ * it as usual using ReceiveTransactionFlow (!) but then subsequently throw a FlowException. The throwing of the exception
+ * will rollback the transaction from the database so that it's not commited and calling ReceiveTransactionFlow gives us
+ * the guarantee that the transaction itself is valid to manually record via the flow hospital.
+ */
+// TODO Should we worry about (accidental?) spamming of the flow hospital from other members using the old API
+class FinalityHandler(val sender: FlowSession, private val disable: Boolean) : FlowLogic<Unit>() {
+    val receiveSubFlow = ReceiveTransactionFlow(sender, true, StatesToRecord.ONLY_RELEVANT)
+
     @Suspendable
     override fun call() {
-        subFlow(ReceiveTransactionFlow(sender, true, StatesToRecord.ONLY_RELEVANT))
+        subFlow(receiveSubFlow)
+        if (disable) {
+            throw FlowException("${sender.counterparty} is attempting to use the old insecure API of FinalityFlow. " +
+                    "This API however is disabled on this node since there no CorDapps installed that require it. " +
+                    "It may be that ${sender.counterparty} is running an older verison of a CorDapp to us. In the meantime " +
+                    "the transaction can be recovered from the flow hospital.")
+            // TODO Add a flow hospital API so that the above statement is possible!
+        }
     }
-
-    internal fun sender(): Party = sender.counterparty
 }
 
 class NotaryChangeHandler(otherSideSession: FlowSession) : AbstractStateReplacementFlow.Acceptor<Party>(otherSideSession) {

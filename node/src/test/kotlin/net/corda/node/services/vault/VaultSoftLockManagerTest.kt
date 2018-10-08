@@ -24,13 +24,12 @@ import net.corda.core.utilities.OpaqueBytes
 import net.corda.core.utilities.getOrThrow
 import net.corda.core.utilities.unwrap
 import net.corda.node.internal.InitiatedFlowFactory
-import net.corda.node.services.api.SchemaService
 import net.corda.node.services.api.VaultServiceInternal
 import net.corda.nodeapi.internal.persistence.CordaPersistence
 import net.corda.testing.core.singleIdentity
 import net.corda.testing.internal.rigorousMock
-import net.corda.testing.node.internal.cordappsForPackages
 import net.corda.testing.node.internal.InternalMockNetwork
+import net.corda.testing.node.internal.cordappsForPackages
 import net.corda.testing.node.internal.startFlow
 import org.junit.After
 import org.junit.Test
@@ -106,12 +105,13 @@ class VaultSoftLockManagerTest {
     object CommandDataImpl : CommandData
 
     class ClientLogic(nodePair: NodePair, val state: ContractState) : NodePair.AbstractClientLogic<List<ContractState>>(nodePair) {
-        override fun callImpl() = run {
-            subFlow(FinalityFlow(serviceHub.signInitialTransaction(TransactionBuilder(notary = ourIdentity).apply {
+        override fun callImpl(): List<ContractState> {
+            val stx = serviceHub.signInitialTransaction(TransactionBuilder(notary = ourIdentity).apply {
                 addOutputState(state, ContractImpl::class.jvmName)
                 addCommand(CommandDataImpl, ourIdentity.owningKey)
-            })))
-            serviceHub.vaultService.queryBy<ContractState>(VaultQueryCriteria(softLockingCondition = SoftLockingCondition(LOCKED_ONLY))).states.map {
+            })
+            subFlow(FinalityFlow(stx, emptyList()))
+            return serviceHub.vaultService.queryBy<ContractState>(VaultQueryCriteria(softLockingCondition = SoftLockingCondition(LOCKED_ONLY))).states.map {
                 it.state.data
             }
         }

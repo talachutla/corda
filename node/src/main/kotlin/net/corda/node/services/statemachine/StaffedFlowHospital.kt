@@ -4,7 +4,9 @@ import net.corda.core.flows.StateMachineRunId
 import net.corda.core.internal.ThreadBox
 import net.corda.core.internal.TimedFlow
 import net.corda.core.internal.bufferUntilSubscribed
+import net.corda.core.internal.declaredField
 import net.corda.core.messaging.DataFeed
+import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.contextLogger
 import net.corda.node.services.FinalityHandler
 import org.hibernate.exception.ConstraintViolationException
@@ -64,7 +66,8 @@ class StaffedFlowHospital {
                 Diagnosis.OVERNIGHT_OBSERVATION -> {
                     log.info("Flow ${flowFiber.id} error kept for overnight observation by ${report.by}")
                     // We don't schedule a next event for the flow - it will automatically retry from its checkpoint on node restart
-                    Pair(MedicalRecord.KeptInForObservation(flowFiber.id, Instant.now(), suspendCount, report.by, errors), null)
+                    val stx = (currentState.flowLogic as FinalityHandler).receiveSubFlow.declaredField<SignedTransaction?>("_receivedTransaction").value
+                    Pair(MedicalRecord.FinalityObservation(flowFiber.id, Instant.now(), suspendCount, report.by, errors, stx), null)
                 }
                 Diagnosis.NOT_MY_SPECIALTY -> {
                     // None of the staff care for these errors so we let them propagate
@@ -131,11 +134,12 @@ class StaffedFlowHospital {
                               val by: List<Staff>,
                               val errors: List<Throwable>) : MedicalRecord()
 
-        data class KeptInForObservation(override val flowId: StateMachineRunId,
-                                        override val at: Instant,
-                                        override val suspendCount: Int,
-                                        val by: List<Staff>,
-                                        val errors: List<Throwable>) : MedicalRecord()
+        data class FinalityObservation(override val flowId: StateMachineRunId,
+                                       override val at: Instant,
+                                       override val suspendCount: Int,
+                                       val by: List<Staff>,
+                                       val errors: List<Throwable>,
+                                       val stx: SignedTransaction?) : MedicalRecord()
 
         data class NothingWeCanDo(override val flowId: StateMachineRunId,
                                   override val at: Instant,
@@ -217,11 +221,18 @@ class StaffedFlowHospital {
      */
     object FinalityDoctor : Staff {
         override fun consult(flowFiber: FlowFiber, currentState: StateMachineState, newError: Throwable, history: MedicalHistory): Diagnosis {
-            return (currentState.flowLogic as? FinalityHandler)?.let { logic -> Diagnosis.OVERNIGHT_OBSERVATION.also { warn(logic, flowFiber, currentState) } } ?: Diagnosis.NOT_MY_SPECIALTY
+            return if (currentState.flowLogic is FinalityHandler) {
+                warn(currentState.flowLogic, flowFiber, currentState)
+                Diagnosis.OVERNIGHT_OBSERVATION
+            } else {
+                Diagnosis.NOT_MY_SPECIALTY
+            }
         }
 
         private fun warn(flowLogic: FinalityHandler, flowFiber: FlowFiber, currentState: StateMachineState) {
-            log.warn("Flow ${flowFiber.id} failed to be finalised. Manual intervention may be required before retrying the flow by re-starting the node. State machine state: $currentState, initiating party was: ${flowLogic.sender().name}")
+            log.warn("Flow ${flowFiber.id} failed to be finalised. Manual intervention may be required before retrying " +
+                    "the flow by re-starting the node. State machine state: $currentState, initiating party was: " +
+                    "${flowLogic.sender.counterparty}")
         }
     }
 }

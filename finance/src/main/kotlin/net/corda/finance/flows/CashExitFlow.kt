@@ -3,8 +3,7 @@ package net.corda.finance.flows
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.Amount
 import net.corda.core.contracts.InsufficientBalanceException
-import net.corda.core.flows.StartableByRPC
-import net.corda.core.identity.Party
+import net.corda.core.flows.*
 import net.corda.core.node.services.queryBy
 import net.corda.core.node.services.vault.DEFAULT_PAGE_NUM
 import net.corda.core.node.services.vault.PageSpecification
@@ -28,6 +27,7 @@ import java.util.*
  * @param issuerRef the reference on the issued currency. Added to the node's legal identity to determine the
  * issuer.
  */
+@InitiatingFlow
 @StartableByRPC
 class CashExitFlow(private val amount: Amount<Currency>,
                    private val issuerRef: OpaqueBytes,
@@ -67,21 +67,29 @@ class CashExitFlow(private val amount: Amount<Currency>,
         val inputStates = serviceHub.vaultService.queryBy<Cash.State>(VaultQueryCriteria(stateRefs = builder.inputStates()),
                 PageSpecification(pageNumber = DEFAULT_PAGE_NUM, pageSize = builder.inputStates().size)).states
 
-        // TODO: Is it safe to drop participants we don't know how to contact? Does not knowing how to contact them
-        //       count as a reason to fail?
-        val participants: Set<Party> = inputStates
+        val participantSessions = inputStates
                 .mapNotNull { serviceHub.identityService.wellKnownPartyFromAnonymous(it.state.data.owner) }
+                .filterNot(serviceHub.myInfo::isLegalIdentity)
                 .toSet()
+                .map { initiateFlow(it) }
         // Sign transaction
         progressTracker.currentStep = SIGNING_TX
         val tx = serviceHub.signInitialTransaction(builder, signers)
 
         // Commit the transaction
         progressTracker.currentStep = FINALISING_TX
-        val notarised = finaliseTx(tx, participants, "Unable to notarise exit")
+        val notarised = finaliseTx(tx, participantSessions, "Unable to notarise exit")
         return Result(notarised, null)
     }
 
     @CordaSerializable
     class ExitRequest(amount: Amount<Currency>, val issuerRef: OpaqueBytes) : AbstractRequest(amount)
+}
+
+@InitiatedBy(CashExitFlow::class)
+class CashExitResponderFlow(private val otherSide: FlowSession) : FlowLogic<Unit>() {
+    @Suspendable
+    override fun call() {
+        subFlow(ReceiveFinalityFlow(otherSide))
+    }
 }

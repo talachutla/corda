@@ -29,10 +29,7 @@ class KotlinIntegrationTestingTutorial {
     @Test
     fun `alice bob cash exchange example`() {
         // START 1
-        driver(DriverParameters(
-                startNodesInProcess = true,
-                extraCordappPackagesToScan = listOf("net.corda.finance.contracts.asset", "net.corda.finance.schemas")
-        )) {
+        driver(DriverParameters(startNodesInProcess = true, extraCordappPackagesToScan = listOf("net.corda.finance"))) {
             val aliceUser = User("aliceUser", "testPassword1", permissions = setOf(
                     startFlow<CashIssueAndPaymentFlow>(),
                     invokeRpc("vaultTrackBy")

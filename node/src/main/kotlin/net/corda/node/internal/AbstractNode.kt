@@ -686,9 +686,18 @@ abstract class AbstractNode<S>(val configuration: NodeConfiguration,
     }
 
     private fun installCoreFlows() {
-        installCoreFlow(FinalityFlow::class, ::FinalityHandler)
+        // Disable the insecure FinalityHandler if none of the loaded CorDapps are old enough to require it.
+        val cordappsNeedingFinalityHandler = cordappLoader.cordapps.filter { it.info.targetPlatformVersion < 4 }
+        if (cordappsNeedingFinalityHandler.isEmpty()) {
+            log.info("FinalityHandler is disabled as there are no CorDapps loaded which require it")
+        } else {
+            log.warn("FinalityHandler is enabled as there are CorDapps that require it: ${cordappsNeedingFinalityHandler.map { it.info }}." +
+                    "This is insecure and it is strongly recommended that newer versions of these CorDapps be used instead.")
+        }
+        installCoreFlow(FinalityFlow::class) { FinalityHandler(it, disable = cordappsNeedingFinalityHandler.isEmpty()) }
         installCoreFlow(NotaryChangeFlow::class, ::NotaryChangeHandler)
         installCoreFlow(ContractUpgradeFlow.Initiate::class, ::ContractUpgradeHandler)
+        // TODO Make this an inlined flow (and remove this flow mapping!), which should be possible now that FinalityFlow is also inlined
         installCoreFlow(SwapIdentitiesFlow::class, ::SwapIdentitiesHandler)
     }
 

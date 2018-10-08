@@ -73,7 +73,7 @@ public class IOUFlow extends FlowLogic<Void> {
                 signedTx, ImmutableList.of(otherPartySession), CollectSignaturesFlow.tracker()));
 
         // Finalising the transaction.
-        subFlow(new FinalityFlow(fullySignedTx));
+        subFlow(new FinalityFlow(fullySignedTx, otherPartySession));
 
         return null;
         // DOCEND 02
