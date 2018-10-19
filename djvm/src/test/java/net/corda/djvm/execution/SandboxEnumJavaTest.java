@@ -18,7 +18,7 @@ public class SandboxEnumJavaTest extends TestBase {
 
     @Test
     public void testEnumInsideSandbox() {
-        sandbox(new Object[]{ DEFAULT }, emptySet(), WARNING, true, ctx -> {
+        parentedSandbox(emptySet(), WARNING, true, ctx -> {
             SandboxExecutor<Integer, String[]> executor = new DeterministicSandboxExecutor<>(ctx.getConfiguration());
             ExecutionSummaryWithResult<String[]> output = WithJava.run(executor, TransformEnum.class, 0);
             assertThat(output.getResult())
@@ -29,7 +29,7 @@ public class SandboxEnumJavaTest extends TestBase {
 
     @Test
     public void testReturnEnumFromSandbox() {
-        sandbox(new Object[]{ DEFAULT }, emptySet(), WARNING, true, ctx -> {
+        parentedSandbox(emptySet(), WARNING, true, ctx -> {
             SandboxExecutor<String, ExampleEnum> executor = new DeterministicSandboxExecutor<>(ctx.getConfiguration());
             ExecutionSummaryWithResult<ExampleEnum> output = WithJava.run(executor, FetchEnum.class, "THREE");
             assertThat(output.getResult())
@@ -40,7 +40,7 @@ public class SandboxEnumJavaTest extends TestBase {
 
     @Test
     public void testWeCanIdentifyClassAsEnum() {
-        sandbox(new Object[]{ DEFAULT }, emptySet(), WARNING, true, ctx -> {
+        parentedSandbox(emptySet(), WARNING, true, ctx -> {
             SandboxExecutor<ExampleEnum, Boolean> executor = new DeterministicSandboxExecutor<>(ctx.getConfiguration());
             ExecutionSummaryWithResult<Boolean> output = WithJava.run(executor, AssertEnum.class, ExampleEnum.THREE);
             assertThat(output.getResult()).isTrue();
@@ -50,7 +50,7 @@ public class SandboxEnumJavaTest extends TestBase {
 
     @Test
     public void testWeCanCreateEnumMap() {
-        sandbox(new Object[]{ DEFAULT }, emptySet(), WARNING, true, ctx -> {
+        parentedSandbox(emptySet(), WARNING, true, ctx -> {
             SandboxExecutor<ExampleEnum, Integer> executor = new DeterministicSandboxExecutor<>(ctx.getConfiguration());
             ExecutionSummaryWithResult<Integer> output = WithJava.run(executor, UseEnumMap.class, ExampleEnum.TWO);
             assertThat(output.getResult()).isEqualTo(1);
@@ -60,7 +60,7 @@ public class SandboxEnumJavaTest extends TestBase {
 
     @Test
     public void testWeCanCreateEnumSet() {
-        sandbox(new Object[]{ DEFAULT }, emptySet(), WARNING, true, ctx -> {
+        parentedSandbox(emptySet(), WARNING, true, ctx -> {
             SandboxExecutor<ExampleEnum, Boolean> executor = new DeterministicSandboxExecutor<>(ctx.getConfiguration());
             ExecutionSummaryWithResult<Boolean> output = WithJava.run(executor, UseEnumSet.class, ExampleEnum.ONE);
             assertThat(output.getResult()).isTrue();

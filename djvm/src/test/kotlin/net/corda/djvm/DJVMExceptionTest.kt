@@ -7,9 +7,9 @@ import sandbox.SandboxFunction
 import sandbox.Task
 import sandbox.java.lang.sandbox
 
-class DJVMExceptionTest {
+class DJVMExceptionTest : TestBase() {
     @Test
-    fun testSingleException() {
+    fun testSingleException() = parentedSandbox {
         val result = Task(SingleExceptionTask()).apply("Hello World")
         assertThat(result).isInstanceOf(Throwable::class.java)
         result as Throwable
@@ -22,7 +22,7 @@ class DJVMExceptionTest {
     }
 
     @Test
-    fun testMultipleExceptions() {
+    fun testMultipleExceptions() = parentedSandbox {
         val result = Task(MultipleExceptionsTask()).apply("Hello World")
         assertThat(result).isInstanceOf(Throwable::class.java)
         result as Throwable
@@ -56,7 +56,7 @@ class DJVMExceptionTest {
     }
 
     @Test
-    fun testJavaThrowableToSandbox() {
+    fun testJavaThrowableToSandbox() = parentedSandbox {
         val result = Throwable("Hello World").sandbox()
         assertThat(result).isInstanceOf(sandbox.java.lang.Throwable::class.java)
         result as sandbox.java.lang.Throwable
@@ -67,7 +67,7 @@ class DJVMExceptionTest {
     }
 
     @Test
-    fun testWeTryToCreateCorrectSandboxExceptionsAtRuntime() {
+    fun testWeTryToCreateCorrectSandboxExceptionsAtRuntime() = parentedSandbox {
         assertThatExceptionOfType(ClassNotFoundException::class.java)
             .isThrownBy { Exception("Hello World").sandbox() }
             .withMessage("sandbox.java.lang.Exception")

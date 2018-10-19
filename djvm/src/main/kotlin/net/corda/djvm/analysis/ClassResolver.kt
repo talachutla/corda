@@ -32,6 +32,14 @@ class ClassResolver(
 ) {
 
     /**
+     * Create a new [ClassResolver] with some different pinned classes.
+     * Used when creating a "child" [AnalysisConfiguration].
+     */
+    fun replacePinnedClasses(newPinnedClasses: Set<String>): ClassResolver {
+        return ClassResolver(newPinnedClasses, templateClasses, whitelist, sandboxPrefix)
+    }
+
+    /**
      * Resolve the class name from a fully qualified name.
      */
     fun resolve(name: String): String {

@@ -74,7 +74,7 @@ open class SandboxExecutor<in TInput, out TOutput>(
             val taskClass = Class.forName("sandbox.Task", false, classLoader)
 
             // Create the user's task object inside the sandbox.
-            val runnable = classLoader.loadForSandbox(runnableClass, context).type.newInstance()
+            val runnable = classLoader.loadClassForSandbox(runnableClass).newInstance()
 
             // Fetch this sandbox's instance of Class<Function> so we can retrieve Task(Function)
             // and then instantiate the Task.
@@ -114,7 +114,7 @@ open class SandboxExecutor<in TInput, out TOutput>(
     fun load(classSource: ClassSource): LoadedClass {
         val context = AnalysisContext.fromConfiguration(configuration.analysisConfiguration)
         val result = IsolatedTask("LoadClass", configuration).run {
-            classLoader.loadForSandbox(classSource, context)
+            classLoader.copyEmpty(context).loadForSandbox(classSource)
         }
         return result.output ?: throw ClassNotFoundException(classSource.qualifiedClassName)
     }
@@ -159,11 +159,13 @@ open class SandboxExecutor<in TInput, out TOutput>(
     ): ReferenceValidationSummary {
         processClassQueue(*classSources.toTypedArray()) { classSource, className ->
             val didLoad = try {
-                classLoader.loadForSandbox(classSource, context)
+                classLoader.copyEmpty(context).loadClassForSandbox(classSource)
                 true
             } catch (exception: SandboxClassLoadingException) {
                 // Continue; all warnings and errors are captured in [context.messages]
                 false
+            } finally {
+                context.messages.acceptProvisional()
             }
             if (didLoad) {
                 context.classes[className]?.apply {

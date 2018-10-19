@@ -1,6 +1,7 @@
 package net.corda.djvm.rewiring
 
 import net.corda.djvm.SandboxConfiguration
+import net.corda.djvm.analysis.AnalysisConfiguration
 import net.corda.djvm.analysis.AnalysisContext
 import net.corda.djvm.analysis.ClassAndMemberVisitor
 import net.corda.djvm.analysis.ExceptionResolver.Companion.getDJVMExceptionOwner
@@ -8,30 +9,32 @@ import net.corda.djvm.analysis.ExceptionResolver.Companion.isDJVMException
 import net.corda.djvm.code.asPackagePath
 import net.corda.djvm.code.asResourcePath
 import net.corda.djvm.references.ClassReference
+import net.corda.djvm.source.AbstractSourceClassLoader
 import net.corda.djvm.source.ClassSource
 import net.corda.djvm.utilities.loggerFor
 import net.corda.djvm.validation.RuleValidator
+import org.objectweb.asm.Type
 
 /**
  * Class loader that enables registration of rewired classes.
  *
- * @param configuration The configuration to use for the sandbox.
+ * @property analysisConfiguration The configuration to use for the analysis.
+ * @property ruleValidator The instance used to validate that any loaded class complies with the specified rules.
+ * @property supportingClassLoader The class loader used to find classes on the extended class path.
+ * @property rewriter The re-writer to use for registered classes.
  * @property context The context in which analysis and processing is performed.
+ * @param throwableClass This sandbox's definition of [sandbox.java.lang.Throwable].
+ * @param parent This classloader's parent classloader.
  */
-class SandboxClassLoader(
-        configuration: SandboxConfiguration,
-        private val context: AnalysisContext
-) : ClassLoader() {
-
-    private val analysisConfiguration = configuration.analysisConfiguration
-
-    /**
-     * The instance used to validate that any loaded class complies with the specified rules.
-     */
-    private val ruleValidator: RuleValidator = RuleValidator(
-            rules = configuration.rules,
-            configuration = analysisConfiguration
-    )
+class SandboxClassLoader private constructor(
+        private val analysisConfiguration: AnalysisConfiguration,
+        private val ruleValidator: RuleValidator,
+        private val supportingClassLoader: AbstractSourceClassLoader,
+        private val rewriter: ClassRewriter,
+        private val context: AnalysisContext,
+        throwableClass: Class<*>?,
+        parent: ClassLoader?
+) : ClassLoader(parent ?: getSystemClassLoader()) {
 
     /**
      * The analyzer used to traverse the class hierarchy.
@@ -50,36 +53,64 @@ class SandboxClassLoader(
     private val loadedClasses = mutableMapOf<String, LoadedClass>()
 
     /**
-     * The class loader used to find classes on the extended class path.
-     */
-    private val supportingClassLoader = analysisConfiguration.supportingClassLoader
-
-    /**
-     * The re-writer to use for registered classes.
-     */
-    private val rewriter: ClassRewriter = ClassRewriter(configuration, supportingClassLoader)
-
-    /**
      * We need to load this class up front, so that we can identify sandboxed exception classes.
      */
     private val throwableClass: Class<*>
 
     init {
         // Bootstrap the loading of the sandboxed Throwable class.
-        loadClassAndBytes(ClassSource.fromClassName("sandbox.java.lang.Object"), context)
-        loadClassAndBytes(ClassSource.fromClassName("sandbox.java.lang.StackTraceElement"), context)
-        throwableClass = loadClassAndBytes(ClassSource.fromClassName("sandbox.java.lang.Throwable"), context).type
+        this.throwableClass = throwableClass ?: run {
+            loadClassAndBytes(ClassSource.fromClassName("sandbox.java.lang.Object"), context)
+            loadClassAndBytes(ClassSource.fromClassName("sandbox.java.lang.StackTraceElement"), context)
+            loadClassAndBytes(ClassSource.fromClassName("sandbox.java.lang.Throwable"), context).type
+        }
     }
+
+    /**
+     * Creates an empty [SandboxClassLoader] with exactly the same
+     * configuration as this one, and with a new [AnalysisContext].
+     */
+    fun copyEmpty(newContext: AnalysisContext) = SandboxClassLoader(
+        analysisConfiguration,
+        ruleValidator,
+        supportingClassLoader,
+        rewriter,
+        newContext,
+        throwableClass,
+        parent
+    )
 
     /**
      * Given a class name, provide its corresponding [LoadedClass] for the sandbox.
      */
-    fun loadForSandbox(name: String, context: AnalysisContext): LoadedClass {
-        return loadClassAndBytes(ClassSource.fromClassName(analysisConfiguration.classResolver.resolveNormalized(name)), context)
+    fun loadForSandbox(className: String): LoadedClass {
+        val sandboxClass = loadClassForSandbox(className)
+        val sandboxName = Type.getInternalName(sandboxClass)
+        var loader = this
+        while(true) {
+            val loaded = loader.loadedClasses[sandboxName]
+            if (loaded != null) {
+                return loaded
+            }
+            loader = loader.parent as? SandboxClassLoader ?: return LoadedClass(sandboxClass, UNMODIFIED)
+        }
     }
 
-    fun loadForSandbox(source: ClassSource, context: AnalysisContext): LoadedClass {
-        return loadForSandbox(source.qualifiedClassName, context)
+    fun loadForSandbox(source: ClassSource): LoadedClass {
+        return loadForSandbox(source.qualifiedClassName)
+    }
+
+    private fun loadClassForSandbox(className: String): Class<*> {
+        val sandboxName = analysisConfiguration.classResolver.resolveNormalized(className)
+        return try {
+            Class.forName(sandboxName, false, this)
+        } finally {
+            context.messages.acceptProvisional()
+        }
+    }
+
+    fun loadClassForSandbox(source: ClassSource): Class<*> {
+        return loadClassForSandbox(source.qualifiedClassName)
     }
 
     /**
@@ -95,10 +126,19 @@ class SandboxClassLoader(
         var clazz = findLoadedClass(name)
         if (clazz == null) {
             val source = ClassSource.fromClassName(name)
-            clazz = if (analysisConfiguration.isSandboxClass(source.internalClassName)) {
-                loadSandboxClass(source, context).type
-            } else {
-                super.loadClass(name, resolve)
+            val isSandboxClass = analysisConfiguration.isSandboxClass(source.internalClassName)
+
+            if (!isSandboxClass || parent is SandboxClassLoader) {
+                try {
+                    clazz = super.loadClass(name, resolve)
+                } catch (e: ClassNotFoundException) {
+                } catch (e: SandboxClassLoadingException) {
+                    context.messages.clearProvisional()
+                }
+            }
+
+            if (clazz == null && isSandboxClass) {
+                clazz = loadSandboxClass(source, context).type
             }
         }
         if (resolve) {
@@ -223,9 +263,26 @@ class SandboxClassLoader(
         }
     }
 
-    private companion object {
+    companion object {
         private val logger = loggerFor<SandboxClassLoader>()
         private val UNMODIFIED = ByteCode(ByteArray(0), false)
+
+        fun createFor(configuration: SandboxConfiguration): SandboxClassLoader {
+            val analysisConfiguration = configuration.analysisConfiguration
+            val supportingClassLoader = analysisConfiguration.supportingClassLoader
+            val parentClassLoader = configuration.parentClassLoader
+
+            return SandboxClassLoader(
+                analysisConfiguration = analysisConfiguration,
+                supportingClassLoader = supportingClassLoader,
+                ruleValidator = RuleValidator(rules = configuration.rules,
+                                              configuration = analysisConfiguration),
+                rewriter = ClassRewriter(configuration, supportingClassLoader),
+                context = AnalysisContext.fromConfiguration(analysisConfiguration),
+                throwableClass = parentClassLoader?.throwableClass,
+                parent = parentClassLoader
+            )
+        }
     }
 
 }

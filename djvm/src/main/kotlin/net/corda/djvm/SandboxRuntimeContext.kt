@@ -1,6 +1,5 @@
 package net.corda.djvm
 
-import net.corda.djvm.analysis.AnalysisContext
 import net.corda.djvm.costing.RuntimeCostSummary
 import net.corda.djvm.rewiring.SandboxClassLoader
 
@@ -14,10 +13,7 @@ class SandboxRuntimeContext(val configuration: SandboxConfiguration) {
     /**
      * The class loader to use inside the sandbox.
      */
-    val classLoader: SandboxClassLoader = SandboxClassLoader(
-            configuration,
-            AnalysisContext.fromConfiguration(configuration.analysisConfiguration)
-    )
+    val classLoader: SandboxClassLoader = SandboxClassLoader.createFor(configuration)
 
     /**
      * A summary of the currently accumulated runtime costs (for, e.g., memory allocations, invocations, etc.).

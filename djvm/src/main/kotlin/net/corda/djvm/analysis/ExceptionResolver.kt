@@ -15,6 +15,14 @@ class ExceptionResolver(
         fun getDJVMExceptionOwner(className: String): String = className.dropLast(DJVM_EXCEPTION_NAME.length)
     }
 
+    /**
+     * Create a new [ExceptionResolver] with some different pinned classes.
+     * Used when creating a "child" [AnalysisConfiguration].
+     */
+    fun replacePinnedClasses(newPinnedClasses: Set<String>): ExceptionResolver {
+        return ExceptionResolver(jvmExceptionClasses, newPinnedClasses, sandboxPrefix)
+    }
+
     fun getThrowableName(clazz: Class<*>): String {
         return getDJVMException(Type.getInternalName(clazz))
     }
