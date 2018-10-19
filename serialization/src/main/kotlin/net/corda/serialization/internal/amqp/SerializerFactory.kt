@@ -9,6 +9,7 @@ import net.corda.core.internal.uncheckedCast
 import net.corda.core.serialization.ClassWhitelist
 import net.corda.core.utilities.*
 import net.corda.serialization.internal.carpenter.*
+import net.corda.serialization.internal.model.getTypeModellingFingerPrinter
 import org.apache.qpid.proton.amqp.*
 import java.io.NotSerializableException
 import java.lang.reflect.*
