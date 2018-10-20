@@ -55,7 +55,7 @@ class BasicHSMKeyManagementService(cacheFactory: NamedCacheFactory, val identity
         fun createKeyMap(cacheFactory: NamedCacheFactory): AppendOnlyPersistentMap<PublicKey, PrivateKey, PersistentKey, String> {
             return AppendOnlyPersistentMap(
                     cacheFactory = cacheFactory,
-                    name = "PersistentKeyManagementService_keys",
+                    name = "BasicHSMKeyManagementService_keys",
                     toPersistentEntityKey = { it.toStringShort() },
                     fromPersistentEntity = { Pair(Crypto.decodePublicKey(it.publicKey), Crypto.decodePrivateKey(
                             it.privateKey)) },
