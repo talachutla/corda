@@ -714,7 +714,7 @@ abstract class AbstractNode<S>(val configuration: NodeConfiguration,
             val sslKeyStore = configuration.p2pSslOptions.keyStore.get()
             val signingCertificateStore = configuration.signingCertificateStore.get()
             val trustStore = configuration.p2pSslOptions.trustStore.get()
-            AllCertificateStores(trustStore, sslKeyStore, identitiesKeyStore)
+            AllCertificateStores(trustStore, sslKeyStore, signingCertificateStore)
         } catch (e: IOException) {
             log.error("IO exception while trying to validate keystores and truststore", e)
             null

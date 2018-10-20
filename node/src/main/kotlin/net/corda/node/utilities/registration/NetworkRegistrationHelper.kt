@@ -1,7 +1,6 @@
 package net.corda.node.utilities.registration
 
 import net.corda.core.crypto.Crypto
-import net.corda.core.crypto.NullKeys
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.internal.*
 import net.corda.core.utilities.contextLogger
@@ -259,10 +258,9 @@ open class NetworkRegistrationHelper(
                 requestId
             }
         } catch (e: Exception) {
-            if (e is ConnectException || e is ServiceUnavailableException || e is IOException) {
-                throw NodeRegistrationException(e)
-            }
-            throw e
+            throw if (e is ConnectException || e is ServiceUnavailableException || e is IOException) {
+                NodeRegistrationException(e.message, e)
+            } else e
         }
     }
 
