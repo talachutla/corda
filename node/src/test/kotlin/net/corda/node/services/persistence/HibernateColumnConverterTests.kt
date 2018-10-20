@@ -52,7 +52,7 @@ class HibernateColumnConverterTests {
         val originalIdentityService: PersistentIdentityService = bankOfCordaNode.services.identityService as PersistentIdentityService
         identityService.database = originalIdentityService.database
         identityService.start(originalIdentityService.trustRoot)
-        val keyService = E2ETestKeyManagementService(identityService, cryptoService)
+        val keyService = E2ETestKeyManagementService(identityService)
         keyService.start((bankOfCordaNode.services.keyManagementService as E2ETestKeyManagementService).keyPairs)
 
         // New identity for a notary (doesn't matter that it's for Bank Of Corda... since not going to use it as an actual notary etc).
