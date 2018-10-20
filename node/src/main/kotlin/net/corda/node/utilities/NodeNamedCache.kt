@@ -56,6 +56,7 @@ open class DefaultNamedCacheFactory private constructor(private val metricRegist
                 name == "DeduplicationChecker_watermark" -> caffeine
                 name == "BFTNonValidatingNotaryService_transactions" -> caffeine.maximumSize(defaultCacheSize)
                 name == "RaftUniquenessProvider_transactions" -> caffeine.maximumSize(defaultCacheSize)
+                name == "BasicHSMKeyManagementService_keys" -> caffeine.maximumSize(defaultCacheSize)
                 else -> throw IllegalArgumentException("Unexpected cache name $name. Did you add a new cache?")
             }
         }
